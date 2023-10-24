@@ -15,6 +15,7 @@
 
 package io.confluent.connect.jdbc.dialect;
 
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -1762,6 +1763,17 @@ public class GenericDatabaseDialect implements DatabaseDialect {
               DateTimeUtils.getTimeZoneCalendar(timeZone)
           );
           return true;
+        case "io.debezium.time.Date":
+          LocalDate ldate = LocalDate.ofEpochDay(((Number) value).longValue());
+          java.util.Date date = java.util.Date.from(
+              ldate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+          );
+          statement.setDate(
+              index,
+              new java.sql.Date(date.getTime()),
+              DateTimeUtils.getTimeZoneCalendar(timeZone)
+          );
+          return true;
         case "io.debezium.time.ZonedTimestamp":
           ZonedDateTime zonedDateTime = (ZonedDateTime) value;
           statement.setObject(index, zonedDateTime.toOffsetDateTime());
@@ -1920,6 +1932,13 @@ public class GenericDatabaseDialect implements DatabaseDialect {
           builder.appendStringQuoted(
               DateTimeUtils.formatTimestamp((java.util.Date) value, timeZone)
           );
+          return;
+        case "io.debezium.time.Date":
+          LocalDate ldate = LocalDate.ofEpochDay(((Number) value).longValue());
+          java.util.Date date = java.util.Date.from(
+              ldate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+          );
+          builder.appendStringQuoted(DateTimeUtils.formatDate((java.util.Date) date, timeZone));
           return;
         case "io.debezium.time.ZonedTimestamp":
           builder.appendStringQuoted(ZonedDateTime.parse((String)value, ZONED_DATE_TIME_FORMATTER));

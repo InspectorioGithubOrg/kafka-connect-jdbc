@@ -34,6 +34,7 @@ import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -304,6 +305,14 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
           return "DATE";
         case "io.debezium.time.ZonedTimestamp":
           return "TIMESTAMPTZ";
+        case "io.debezium.data.geometry.Geometry":
+        case "io.debezium.data.geometry.Geography":
+        case "io.debezium.data.geometry.Point":
+          return "TEXT";
+        case "io.debezium.data.Json":
+          return JSON_TYPE_NAME;
+        case "io.debezium.data.Uuid":
+          return UUID_TYPE_NAME;
         default:
           // fall through to normal types
       }
@@ -446,6 +455,18 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
       );
       super.bindField(statement, index, schema, zonedDateTimeValue, colDef);
     } else {
+      // Handle value for Geometry as NULL
+      //  if (schema != null) {
+      //    switch (schema.name()) {
+      //      case "io.debezium.data.geometry.Point":
+      //      case "io.debezium.data.geometry.Geography":
+      //      case "io.debezium.data.geometry.Geometry":
+      //        super.bindField(statement, index, schema, null, colDef);
+      //        break;
+      //      default:
+      //        super.bindField(statement, index, schema, value, colDef);
+      //    }
+      //  }
       super.bindField(statement, index, schema, value, colDef);
     }
   }
@@ -535,7 +556,31 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
       default:
         break;
     }
+
+    if (maybeBindPostgresDataType(statement, index, schema, value)) {
+      return true;
+    }
     return super.maybeBindPrimitive(statement, index, schema, value);
+  }
+
+  private boolean maybeBindPostgresDataType(
+          PreparedStatement statement,
+          int index,
+          Schema schema,
+          Object value
+  ) throws SQLException {
+    if (schema.name() != null) {
+      switch (schema.name()) {
+        case "io.debezium.data.geometry.Point":
+        case "io.debezium.data.geometry.Geography":
+        case "io.debezium.data.geometry.Geometry":
+          statement.setString(index, (String) ((Struct) value).toString());
+          return true;
+        default:
+          return false;
+      }
+    }
+    return false;
   }
 
   /**

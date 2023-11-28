@@ -465,6 +465,32 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
     }
   }
 
+  protected java.sql.Date convertDate(Object value) {
+    // convert date
+    java.time.LocalDate ldate = java.time.LocalDate.ofEpochDay(((Number) value).longValue());
+    java.util.Date date = java.util.Date.from(
+        ldate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+    );
+    return new java.sql.Date(date.getTime());
+  }
+
+  protected Object getCustomNewValue(Schema schema, Collection<?> valueCollection) {
+    Object newValue = null;
+    if (schema.valueSchema().name() != null) {
+      switch (schema.valueSchema().name()) {
+        case "io.debezium.time.Date":
+          newValue = valueCollection.stream()
+                .map(o -> convertDate(o).toString())
+                .toArray(String[]::new);
+          break;
+        default:
+          // fall through to regular types
+          break;
+      }
+    }
+    return newValue;
+  }
+
   @Override
   protected boolean maybeBindPrimitive(
       PreparedStatement statement,
@@ -487,43 +513,52 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
               String.format("Type '%s' is not supported for Array.", valueClass.getName())
           );
         }
-
-        // All typecasts below are based on pgjdbc's documentation on how to use primitive arrays
-        // - https://jdbc.postgresql.org/documentation/head/arrays.html
-        switch (schema.valueSchema().type()) {
-          case INT8: {
-            // Gotta do this the long way, as Postgres has no single-byte integer,
-            // so we want to cast to short as the next best thing, and we can't do that with
-            // toArray.
-
-            newValue = valueCollection.stream()
-                .map(o -> ((Byte) o).shortValue())
-                .toArray(Short[]::new);
-            break;
+        Object customNewValue = getCustomNewValue(schema, valueCollection);
+        if (customNewValue != null) {
+          newValue = customNewValue;
+          if (newValue != null) {
+            statement.setObject(index, newValue, Types.ARRAY);
+            return true;
           }
-          case INT32:
-            newValue = valueCollection.toArray(new Integer[0]);
-            break;
-          case INT16:
-            newValue = valueCollection.toArray(new Short[0]);
-            break;
-          case BOOLEAN:
-            newValue = valueCollection.toArray(new Boolean[0]);
-            break;
-          case STRING:
-            newValue = valueCollection.toArray(new String[0]);
-            break;
-          case FLOAT64:
-            newValue = valueCollection.toArray(new Double[0]);
-            break;
-          case FLOAT32:
-            newValue = valueCollection.toArray(new Float[0]);
-            break;
-          case INT64:
-            newValue = valueCollection.toArray(new Long[0]);
-            break;
-          default:
-            break;
+        } else {
+
+          // All typecasts below are based on pgjdbc's documentation on how to use primitive arrays
+          // - https://jdbc.postgresql.org/documentation/head/arrays.html
+          switch (schema.valueSchema().type()) {
+            case INT8: {
+              // Gotta do this the long way, as Postgres has no single-byte integer,
+              // so we want to cast to short as the next best thing, and we can't do that with
+              // toArray.
+
+              newValue = valueCollection.stream()
+                  .map(o -> ((Byte) o).shortValue())
+                  .toArray(Short[]::new);
+              break;
+            }
+            case INT32:
+              newValue = valueCollection.toArray(new Integer[0]);
+              break;
+            case INT16:
+              newValue = valueCollection.toArray(new Short[0]);
+              break;
+            case BOOLEAN:
+              newValue = valueCollection.toArray(new Boolean[0]);
+              break;
+            case STRING:
+              newValue = valueCollection.toArray(new String[0]);
+              break;
+            case FLOAT64:
+              newValue = valueCollection.toArray(new Double[0]);
+              break;
+            case FLOAT32:
+              newValue = valueCollection.toArray(new Float[0]);
+              break;
+            case INT64:
+              newValue = valueCollection.toArray(new Long[0]);
+              break;
+            default:
+              break;
+          }
         }
 
         if (newValue != null) {

@@ -486,6 +486,89 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
     }
   }
 
+  protected java.sql.Date convertToDate(Object value) {
+    // convert int to date
+    java.time.LocalDate ldate = java.time.LocalDate.ofEpochDay(((Number) value).longValue());
+    java.util.Date date = java.util.Date.from(
+        ldate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+    );
+    return new java.sql.Date(date.getTime());
+  }
+
+  protected java.sql.Timestamp convertToTimestamp(Object value) {
+    // convert string to timestamp
+    java.time.ZonedDateTime zonedDateTimeValue = java.time.ZonedDateTime.parse(
+              (String)value, ZONED_DATE_TIME_FORMATTER
+      );
+    return java.sql.Timestamp.from(zonedDateTimeValue.toInstant());
+  }
+
+  protected Object getCustomNewValue(Schema schema, Collection<?> valueCollection) {
+    Object newValue = null;
+    if (schema.valueSchema().name() != null) {
+      switch (schema.valueSchema().name()) {
+        case "io.debezium.time.Date":
+          newValue = valueCollection.stream()
+                .map(o -> convertToDate(o))
+                .toArray(java.sql.Date[]::new);
+          break;
+        case "io.debezium.time.ZonedTimestamp":
+          newValue = valueCollection.stream()
+                .map(o -> convertToTimestamp(o))
+                .toArray(java.sql.Timestamp[]::new);
+          break;
+        default:
+          // fall through to regular types
+          break;
+      }
+    }
+    return newValue;
+  }
+
+  protected Object getArrayNewValue(Schema schema, Collection<?> valueCollection) {
+    Object newValue = null;
+    // All typecasts below are based on pgjdbc's documentation on how to use primitive arrays
+    // - https://jdbc.postgresql.org/documentation/head/arrays.html
+    switch (schema.valueSchema().type()) {
+      case INT8: {
+        // Gotta do this the long way, as Postgres has no single-byte integer,
+        // so we want to cast to short as the next best thing, and we can't do that with
+        // toArray.
+
+        newValue = valueCollection.stream()
+            .map(o -> ((Byte) o).shortValue())
+            .toArray(Short[]::new);
+        break;
+      }
+      case INT32:
+        newValue = valueCollection.toArray(new Integer[0]);
+        break;
+      case INT16:
+        newValue = valueCollection.toArray(new Short[0]);
+        break;
+      case BOOLEAN:
+        newValue = valueCollection.toArray(new Boolean[0]);
+        break;
+      case STRING:
+        newValue = valueCollection.toArray(new String[0]);
+        break;
+      case FLOAT64:
+        newValue = valueCollection.toArray(new Double[0]);
+        break;
+      case FLOAT32:
+        newValue = valueCollection.toArray(new Float[0]);
+        break;
+      case INT64:
+        newValue = valueCollection.toArray(new Long[0]);
+        break;
+      default:
+        break;
+    }
+
+    return newValue;
+  }
+
+
   @Override
   protected boolean maybeBindPrimitive(
       PreparedStatement statement,
@@ -508,43 +591,9 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
               String.format("Type '%s' is not supported for Array.", valueClass.getName())
           );
         }
-
-        // All typecasts below are based on pgjdbc's documentation on how to use primitive arrays
-        // - https://jdbc.postgresql.org/documentation/head/arrays.html
-        switch (schema.valueSchema().type()) {
-          case INT8: {
-            // Gotta do this the long way, as Postgres has no single-byte integer,
-            // so we want to cast to short as the next best thing, and we can't do that with
-            // toArray.
-
-            newValue = valueCollection.stream()
-                .map(o -> ((Byte) o).shortValue())
-                .toArray(Short[]::new);
-            break;
-          }
-          case INT32:
-            newValue = valueCollection.toArray(new Integer[0]);
-            break;
-          case INT16:
-            newValue = valueCollection.toArray(new Short[0]);
-            break;
-          case BOOLEAN:
-            newValue = valueCollection.toArray(new Boolean[0]);
-            break;
-          case STRING:
-            newValue = valueCollection.toArray(new String[0]);
-            break;
-          case FLOAT64:
-            newValue = valueCollection.toArray(new Double[0]);
-            break;
-          case FLOAT32:
-            newValue = valueCollection.toArray(new Float[0]);
-            break;
-          case INT64:
-            newValue = valueCollection.toArray(new Long[0]);
-            break;
-          default:
-            break;
+        newValue = getCustomNewValue(schema, valueCollection);
+        if (newValue == null) {
+          newValue = getArrayNewValue(schema, valueCollection);
         }
 
         if (newValue != null) {
@@ -556,7 +605,6 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
       default:
         break;
     }
-
     if (maybeBindPostgresDataType(statement, index, schema, value)) {
       return true;
     }

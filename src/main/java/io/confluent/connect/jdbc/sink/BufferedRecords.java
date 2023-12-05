@@ -16,8 +16,10 @@
 package io.confluent.connect.jdbc.sink;
 
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.data.Struct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,8 +82,9 @@ public class BufferedRecords {
   public List<SinkRecord> add(SinkRecord record) throws SQLException, TableAlterOrCreateException {
     recordValidator.validate(record);
     final List<SinkRecord> flushed = new ArrayList<>();
-
+    
     boolean schemaChanged = false;
+
     if (!Objects.equals(keySchema, record.keySchema())) {
       keySchema = record.keySchema();
       schemaChanged = true;
@@ -103,6 +106,12 @@ public class BufferedRecords {
       valueSchema = record.valueSchema();
       schemaChanged = true;
     }
+
+    List<String> toastedCols = findToastedCols(record);
+    if (toastedCols.size() > 0) {
+      schemaChanged = true;
+    }
+
     if (schemaChanged || updateStatementBinder == null) {
       // Each batch needs to have the same schemas, so get the buffered records out
       flushed.addAll(flush());
@@ -119,6 +128,9 @@ public class BufferedRecords {
           config.fieldsWhitelist,
           schemaPair
       );
+      if (toastedCols.size() > 0 && !fieldsMetadata.nonKeyFieldNames.isEmpty()) {
+        fieldsMetadata.nonKeyFieldNames.removeAll(toastedCols);
+      }
       dbStructure.createOrAmendIfNecessary(
           config,
           connection,
@@ -190,6 +202,41 @@ public class BufferedRecords {
     records = new ArrayList<>();
     deletesInBatch = false;
     return flushedRecords;
+  }
+
+
+  private List<String> findToastedCols(SinkRecord record) throws SQLException {
+
+    List<String> toastedCols = new ArrayList<>();
+
+    if (isNull(record.valueSchema()) || isNull(record.value())) {
+      return toastedCols;
+    }
+
+    Struct recordValue = (Struct) record.value();
+    for (Field field : record.valueSchema().fields()) {
+      switch (field.schema().type().getName()) {
+        case "array": {
+          if ("[__debezium_unavailable_value]".equals(
+                  recordValue.getArray(field.name()).toString())) {
+            log.info("Detect toasted array-field {}", field.name());
+            toastedCols.add(field.name());
+          }
+          break;
+        }
+        case "string": {
+          if ("__debezium_unavailable_value".equals(
+                  recordValue.getString(field.name()))) {
+            log.info("Detect toasted field {}", field.name());
+            toastedCols.add(field.name());
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    return toastedCols;
   }
 
   private void executeUpdates() throws SQLException {

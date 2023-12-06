@@ -1609,7 +1609,7 @@ public class GenericDatabaseDialect implements DatabaseDialect {
   }
 
   @Override
-  public final String buildDeleteStatement(
+  public String buildDeleteStatement(
       TableId table,
       Collection<ColumnId> keyColumns
   ) {

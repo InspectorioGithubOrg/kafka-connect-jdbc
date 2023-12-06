@@ -217,8 +217,9 @@ public class BufferedRecords {
     for (Field field : record.valueSchema().fields()) {
       switch (field.schema().type().getName()) {
         case "array": {
-          if ("[__debezium_unavailable_value]".equals(
-                  recordValue.getArray(field.name()).toString())) {
+          Object fieldValue = recordValue.getArray(field.name());
+          if (!isNull(fieldValue) && "[__debezium_unavailable_value]".equals(
+                  fieldValue.toString())) {
             log.info("Detect toasted array-field {}", field.name());
             toastedCols.add(field.name());
           }

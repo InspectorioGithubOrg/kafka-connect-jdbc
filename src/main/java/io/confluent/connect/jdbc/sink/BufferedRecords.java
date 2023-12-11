@@ -330,10 +330,17 @@ public class BufferedRecords {
             throw new ConnectException("Require primary keys to support delete");
           }
           try {
-            sql = dbDialect.buildDeleteStatement(
-                tableId,
-                asColumns(fieldsMetadata.keyFieldNames)
-            );
+            if (config.deleteSoftEnabled) {
+              sql = dbDialect.buildSoftDeleteStatement(
+                      tableId,
+                      asColumns(fieldsMetadata.keyFieldNames)
+              );
+            } else {
+              sql = dbDialect.buildDeleteStatement(
+                      tableId,
+                      asColumns(fieldsMetadata.keyFieldNames)
+              );
+            }
           } catch (UnsupportedOperationException e) {
             throw new ConnectException(String.format(
                 "Deletes to table '%s' are not supported with the %s dialect.",

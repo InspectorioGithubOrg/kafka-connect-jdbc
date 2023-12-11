@@ -132,11 +132,15 @@ public class JdbcSinkConfig extends AbstractConfig {
   private static final String BATCH_SIZE_DISPLAY = "Batch Size";
 
   public static final String DELETE_ENABLED = "delete.enabled";
+
   private static final String DELETE_ENABLED_DEFAULT = "false";
   private static final String DELETE_ENABLED_DOC =
       "Whether to treat ``null`` record values as deletes. Requires ``pk.mode`` "
       + "to be ``record_key``.";
   private static final String DELETE_ENABLED_DISPLAY = "Enable deletes";
+
+  public static final String DELETE_SOFT_ENABLED = "delete.soft";
+  private static final String DELETE_SOFT_ENABLED_DISPLAY = "Enable soft deletes";
 
   public static final String AUTO_CREATE = "auto.create";
   private static final String AUTO_CREATE_DEFAULT = "false";
@@ -377,6 +381,17 @@ public class JdbcSinkConfig extends AbstractConfig {
             DeleteEnabledRecommender.INSTANCE
         )
         .define(
+            DELETE_SOFT_ENABLED,
+            ConfigDef.Type.BOOLEAN,
+            DELETE_ENABLED_DEFAULT,
+            ConfigDef.Importance.MEDIUM,
+            DELETE_ENABLED_DOC, WRITES_GROUP,
+            3,
+            ConfigDef.Width.SHORT,
+            DELETE_SOFT_ENABLED_DISPLAY,
+            DeleteEnabledRecommender.INSTANCE
+        )
+        .define(
             TABLE_TYPES_CONFIG,
             ConfigDef.Type.LIST,
             TABLE_TYPES_DEFAULT,
@@ -531,6 +546,7 @@ public class JdbcSinkConfig extends AbstractConfig {
   public final String tableNameFormat;
   public final int batchSize;
   public final boolean deleteEnabled;
+  public final boolean deleteSoftEnabled;
   public final int maxRetries;
   public final int retryBackoffMs;
   public final boolean autoCreate;
@@ -557,6 +573,7 @@ public class JdbcSinkConfig extends AbstractConfig {
     tableNameFormat = getString(TABLE_NAME_FORMAT).trim();
     batchSize = getInt(BATCH_SIZE);
     deleteEnabled = getBoolean(DELETE_ENABLED);
+    deleteSoftEnabled = getBoolean(DELETE_SOFT_ENABLED);
     maxRetries = getInt(MAX_RETRIES);
     retryBackoffMs = getInt(RETRY_BACKOFF_MS);
     autoCreate = getBoolean(AUTO_CREATE);

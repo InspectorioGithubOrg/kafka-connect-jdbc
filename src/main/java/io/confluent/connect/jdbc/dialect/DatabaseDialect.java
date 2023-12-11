@@ -493,6 +493,13 @@ public interface DatabaseDialect extends ConnectionProvider {
     throw new UnsupportedOperationException();
   }
 
+  default String buildSoftDeleteStatement(
+          TableId table,
+          Collection<ColumnId> keyColumns
+  ) {
+    throw new UnsupportedOperationException();
+  }
+
   /**
    * Build the DROP TABLE statement expression for the given table.
    *

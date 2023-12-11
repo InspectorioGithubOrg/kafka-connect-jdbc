@@ -1626,6 +1626,24 @@ public class GenericDatabaseDialect implements DatabaseDialect {
     return builder.toString();
   }
 
+  public String buildSoftDeleteStatement(
+      TableId table,
+      Collection<ColumnId> keyColumns
+  ) {
+    ExpressionBuilder builder = expressionBuilder();
+    builder.append("UPDATE ");
+    builder.append(table);
+    if (!keyColumns.isEmpty()) {
+      builder.append(" SET __kafka_deleted = true, datalake_updated_at = now() ");
+      builder.append(" WHERE ");
+      builder.appendList()
+          .delimitedBy(" AND ")
+          .transformedBy(ExpressionBuilder.columnNamesWith(" = ?"))
+          .of(keyColumns);
+    }
+    return builder.toString();
+  }
+
   @SuppressWarnings("deprecation")
   @Override
   public StatementBinder statementBinder(

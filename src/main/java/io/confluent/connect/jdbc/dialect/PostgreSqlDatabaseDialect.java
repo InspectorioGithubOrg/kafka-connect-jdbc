@@ -347,24 +347,6 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
     }
   }
 
-  @Override
-  public final String buildDeleteStatement(
-      TableId table,
-      Collection<ColumnId> keyColumns
-  ) {
-    ExpressionBuilder builder = expressionBuilder();
-    builder.append("UPDATE ");
-    builder.append(table);
-    if (!keyColumns.isEmpty()) {
-      builder.append(" SET is_deleted = true, datalake_updated_at = now() ");
-      builder.append(" WHERE ");
-      builder.appendList()
-          .delimitedBy(" AND ")
-          .transformedBy(ExpressionBuilder.columnNamesWith(" = ?"))
-          .of(keyColumns);
-    }
-    return builder.toString();
-  }
 
   @Override
   public String buildInsertStatement(

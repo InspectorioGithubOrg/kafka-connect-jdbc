@@ -98,6 +98,9 @@ import io.confluent.connect.jdbc.util.TableDefinition;
 import io.confluent.connect.jdbc.util.TableId;
 import io.confluent.connect.jdbc.util.TableType;
 
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
+
 /**
  * A {@link DatabaseDialect} implementation that provides functionality based upon JDBC and SQL.
  *
@@ -1781,6 +1784,14 @@ public class GenericDatabaseDialect implements DatabaseDialect {
               DateTimeUtils.getTimeZoneCalendar(timeZone)
           );
           return true;
+        case "io.debezium.time.MicroTimestamp":
+          // Upsert value
+          Long microsSinceEpoch = ((Number) value).longValue();
+          Instant instant = Instant.ofEpochSecond(
+                TimeUnit.MICROSECONDS.toSeconds(microsSinceEpoch),
+                TimeUnit.MICROSECONDS.toNanos(microsSinceEpoch % TimeUnit.SECONDS.toMicros(1)));
+          statement.setObject(index, instant.atOffset(ZoneOffset.UTC));
+          return true;
         case "io.debezium.time.Date":
           LocalDate ldate = LocalDate.ofEpochDay(((Number) value).longValue());
           java.util.Date date = java.util.Date.from(
@@ -1950,6 +1961,15 @@ public class GenericDatabaseDialect implements DatabaseDialect {
           builder.appendStringQuoted(
               DateTimeUtils.formatTimestamp((java.util.Date) value, timeZone)
           );
+          return;
+        case "io.debezium.time.MicroTimestamp":
+          // Support default value
+          Long microsSinceEpoch = ((Number) value).longValue();
+          Instant instant = Instant.ofEpochSecond(
+                TimeUnit.MICROSECONDS.toSeconds(microsSinceEpoch),
+                TimeUnit.MICROSECONDS.toNanos(microsSinceEpoch % TimeUnit.SECONDS.toMicros(1)));
+          builder.appendStringQuoted(
+              DateTimeUtils.toIsoDateTimeString(Timestamp.from(instant), timeZone));
           return;
         case "io.debezium.time.Date":
           LocalDate ldate = LocalDate.ofEpochDay(((Number) value).longValue());

@@ -305,6 +305,8 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
           return "DATE";
         case "io.debezium.time.ZonedTimestamp":
           return "TIMESTAMPTZ";
+        case "io.debezium.time.MicroTimestamp":
+          return "TIMESTAMP";
         case "io.debezium.data.geometry.Geometry":
         case "io.debezium.data.geometry.Geography":
         case "io.debezium.data.geometry.Point":

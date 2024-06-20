@@ -625,7 +625,11 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
         case "io.debezium.data.geometry.Point":
         case "io.debezium.data.geometry.Geography":
         case "io.debezium.data.geometry.Geometry":
-          statement.setString(index, (String) ((Struct) value).toString());
+          statement.setString(index, (String) 
+              javax.xml.bind.DatatypeConverter.printHexBinary(
+                ((Struct) value).getBytes("wkb")
+              )
+          );
           return true;
         default:
           return false;

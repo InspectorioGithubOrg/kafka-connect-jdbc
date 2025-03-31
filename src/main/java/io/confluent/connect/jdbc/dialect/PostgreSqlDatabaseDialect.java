@@ -314,7 +314,7 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
         case "io.debezium.data.Json":
           return JSON_TYPE_NAME;
         case "io.debezium.data.Uuid":
-          return UUID_TYPE_NAME;
+          return "TEXT";
         default:
           // fall through to normal types
       }

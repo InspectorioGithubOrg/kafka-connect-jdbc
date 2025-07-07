@@ -284,13 +284,41 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
     return super.columnConverterFor(mapping, defn, col, isJdbc4);
   }
 
+  @Override
+  public String buildCreateTableStatement(
+      TableId table,
+      Collection<SinkRecordField> fields
+  ) {
+    final java.util.List<String> pkFieldNames = extractPrimaryKeyFieldNames(fields);
+    if (fields.size() == pkFieldNames.size()) {
+      // Table is empty, so need to add fields
+      Collection<SinkRecordField> mutableFields = new java.util.ArrayList<>(fields);
+      mutableFields.add(new SinkRecordField(
+          Schema.STRING_SCHEMA, 
+          "datalake_updated_at", 
+          false
+        )
+      );
+      mutableFields.add(new SinkRecordField(
+          Schema.BOOLEAN_SCHEMA, 
+          "__kafka_deleted", 
+          false
+        )
+      );
+      return super.buildCreateTableStatement(table, mutableFields);
+    }
+    return super.buildCreateTableStatement(table, fields);
+  }
+
   protected boolean isJsonType(ColumnDefinition columnDefn) {
     String typeName = columnDefn.typeName();
     return JSON_TYPE_NAME.equalsIgnoreCase(typeName) || JSONB_TYPE_NAME.equalsIgnoreCase(typeName);
   }
 
-  @Override
-  protected String getSqlType(SinkRecordField field) {
+  protected String getSqlTypeBySchema(SinkRecordField field) {
+    if ("datalake_updated_at".equals(field.name())) {
+      return "TIMESTAMP";
+    }
     if (field.schemaName() != null) {
       switch (field.schemaName()) {
         case Decimal.LOGICAL_NAME:
@@ -319,6 +347,16 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
           // fall through to normal types
       }
     }
+    return null;
+  }
+
+  @Override
+  protected String getSqlType(SinkRecordField field) {
+    String typeBySchema = getSqlTypeBySchema(field);
+    if (typeBySchema != null) {
+      return typeBySchema;
+    }
+    
     switch (field.schemaType()) {
       case INT8:
       case INT16:
@@ -683,7 +721,11 @@ public class PostgreSqlDatabaseDialect extends GenericDatabaseDialect {
    */
   protected String valueTypeCast(TableDefinition tableDefn, ColumnId columnId) {
     if (tableDefn != null) {
-      ColumnDefinition defn = tableDefn.definitionForColumn(columnId.name());
+      String colName = columnId.name();
+      if ("datalake_updated_at".equals(colName)) {
+        return "::" + "timestamp";
+      }
+      ColumnDefinition defn = tableDefn.definitionForColumn(colName);
       if (defn != null) {
         String typeName = defn.typeName(); // database-specific
         if (typeName != null) {
